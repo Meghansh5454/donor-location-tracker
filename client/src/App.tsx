@@ -5,7 +5,10 @@ import './App.css';
 const getApiBaseUrl = () => {
   // Check if we're on a devtunnel URL
   if (window.location.hostname.includes('.devtunnels.ms')) {
-    // For devtunnel, use the same origin (React and backend are served from same devtunnel)
+    return '';
+  }
+  // Check if we're on Render
+  if (window.location.hostname.includes('.onrender.com')) {
     return '';
   }
   // In development, React dev server runs on 3001, backend on 3000
