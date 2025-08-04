@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node server.ts",
     "build": "tsc",
+    "build:full": "npm install && npm run build && cd client && npm install && npm run build && cd .. && mkdir -p public && cp -r client/build/* public/",
     "start": "node dist/server.js"
   },
   "keywords": [],
