@@ -19,6 +19,8 @@ const getApiBaseUrl = () => {
 };
 const API_BASE_URL = getApiBaseUrl();
 
+// Updated: Demo version 1.1
+
 function App() {
   const [result, setResult] = React.useState('');
   const [currentCoords, setCurrentCoords] = React.useState<{lat: number, lng: number, acc: number} | null>(null);
