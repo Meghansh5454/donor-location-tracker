@@ -64,6 +64,10 @@ const geofenceRadiusKm = 50;
 app.post('/api/save-location', async (req, res) => {
   try {
     const { latitude, longitude, accuracy, userName, rollNumber, mobileNumber, token, requestId } = req.body;
+    
+    console.log('Received request body:', req.body);
+    console.log('Extracted token:', token);
+    console.log('Extracted requestId:', requestId);
 
     if (!latitude || !longitude) return res.status(400).json({ error: 'Coordinates required' });
 

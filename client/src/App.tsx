@@ -23,19 +23,30 @@ const API_BASE_URL = getApiBaseUrl();
 // Function to generate and download donor card PNG
 const generateAndDownloadDonorCard = async (qrData: any, donorId: string, userName: string, rollNumber: string, mobileNumber: string) => {
   try {
-    // Ensure requestId from URL is included in QR data
+    // Extract requestId from URL path (e.g., /donor-location/68d01d1b06f6b3941cece196)
+    const urlPath = window.location.pathname;
+    const pathParts = urlPath.split('/');
+    const currentRequestId = pathParts[pathParts.length - 1]; // Get last part of path
+    
+    // Still check for token in query params if needed
     const urlParams = new URLSearchParams(window.location.search);
-    const currentRequestId = urlParams.get('request_id');
     const currentToken = urlParams.get('token');
     
-    // Update qrData to ensure it has the current URL parameters
+    console.log('Current URL:', window.location.href);
+    console.log('URL path:', window.location.pathname);
+    console.log('URL Search params:', window.location.search);
+    console.log('Extracted requestId from path:', currentRequestId);
+    console.log('Extracted token from query:', currentToken);
+    console.log('Backend qrData:', qrData);
+    
+    // ALWAYS use current URL parameters, ignore backend values
     const updatedQrData = {
       ...qrData,
-      requestId: currentRequestId || qrData.requestId,
-      token: currentToken || qrData.token
+      requestId: currentRequestId, // Always use current URL value
+      token: currentToken // Always use current URL value
     };
     
-    console.log('QR Data being encoded:', updatedQrData);
+    console.log('Final QR Data being encoded:', updatedQrData);
     
     // Format QR data as readable text
     const qrText = `REQUEST_ID
@@ -190,10 +201,22 @@ function App() {
   const [mobileNumber, setMobileNumber] = React.useState('');
   const [locationStatus, setLocationStatus] = React.useState<'getting' | 'success' | 'error' | 'denied'>('getting');
 
-  // Extract URL parameters
+  // Extract requestId from URL path and token from query params
+  const urlPath = window.location.pathname;
+  const pathParts = urlPath.split('/');
+  const requestId = pathParts[pathParts.length - 1]; // Get last part of path
+  
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get('token');
-  const requestId = urlParams.get('request_id');
+
+  // Debug URL parameters
+  React.useEffect(() => {
+    console.log('Component mounted - URL:', window.location.href);
+    console.log('Component mounted - URL path:', window.location.pathname);
+    console.log('Component mounted - Search params:', window.location.search);
+    console.log('Component mounted - Extracted requestId from path:', requestId);
+    console.log('Component mounted - token:', token);
+  }, [token, requestId]);
 
   // Auto-fetch location when component mounts
   React.useEffect(() => {
