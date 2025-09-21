@@ -23,8 +23,36 @@ const API_BASE_URL = getApiBaseUrl();
 // Function to generate and download donor card PNG
 const generateAndDownloadDonorCard = async (qrData: any, donorId: string, userName: string, rollNumber: string, mobileNumber: string) => {
   try {
-    // Generate QR code as data URL
-    const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
+    // Ensure requestId from URL is included in QR data
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentRequestId = urlParams.get('request_id');
+    const currentToken = urlParams.get('token');
+    
+    // Update qrData to ensure it has the current URL parameters
+    const updatedQrData = {
+      ...qrData,
+      requestId: currentRequestId || qrData.requestId,
+      token: currentToken || qrData.token
+    };
+    
+    console.log('QR Data being encoded:', updatedQrData);
+    
+    // Format QR data as readable text
+    const qrText = `REQUEST_ID
+${updatedQrData.requestId || 'N/A'}
+DONOR_ID
+${donorId}
+Name:
+${userName}
+Roll Number:
+${rollNumber}
+Mobile:
+${mobileNumber}`;
+    
+    console.log('QR Text format:', qrText);
+    
+    // Generate QR code as data URL with formatted text
+    const qrCodeDataURL = await QRCode.toDataURL(qrText, {
       width: 200,
       margin: 2,
       color: {
@@ -91,8 +119,25 @@ const generateAndDownloadDonorCard = async (qrData: any, donorId: string, userNa
     ctx.font = 'bold 16px Arial';
     ctx.fillText(mobileNumber, leftMargin + 70, yPos);
 
+    // Add Request ID and Token if available
+    if (updatedQrData.requestId) {
+      yPos += 30;
+      ctx.font = '16px Arial';
+      ctx.fillText('Request ID:', leftMargin, yPos);
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText(updatedQrData.requestId, leftMargin + 100, yPos);
+    }
+
+    if (updatedQrData.token) {
+      yPos += 30;
+      ctx.font = '16px Arial';
+      ctx.fillText('Token:', leftMargin, yPos);
+      ctx.font = 'bold 16px Arial';
+      ctx.fillText(updatedQrData.token.substring(0, 8) + '...', leftMargin + 60, yPos);
+    }
+
     // QR Code section
-    yPos += 80;
+    yPos += 50;
     ctx.fillStyle = '#007bff';
     ctx.font = 'bold 18px Arial';
     ctx.textAlign = 'center';
@@ -236,8 +281,8 @@ function App() {
   };
 
   const saveCurrentLocation = async () => {
-    if (!userName.trim() || !rollNumber.trim() || !mobileNumber.trim()) {
-      setResult("❌ Please fill in all details (Name, Roll Number, Mobile).");
+    if (!currentCoords || !userName.trim() || !rollNumber.trim() || !mobileNumber.trim()) {
+      setResult('❌ Please fill in all details (Name, Roll Number, Mobile).');
       return;
     }
     
@@ -247,22 +292,36 @@ function App() {
     }
 
     setResult("💾 Saving your location to database...");
+    
+    // Debug: Log URL parameters
+    console.log('URL Parameters:', { token, requestId });
+    
     try {
+      const requestBody = {
+        latitude: currentCoords.lat,
+        longitude: currentCoords.lng,
+        accuracy: currentCoords.acc,
+        userName,
+        rollNumber,
+        mobileNumber,
+        token,
+        requestId
+      };
+      
+      // Debug: Log what we're sending to backend
+      console.log('Sending to backend:', requestBody);
+      
       const res = await fetch(`${API_BASE_URL}/api/save-location`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          latitude: currentCoords.lat,
-          longitude: currentCoords.lng,
-          accuracy: currentCoords.acc,
-          userName,
-          rollNumber,
-          mobileNumber,
-          token,
-          requestId
-        })
+        body: JSON.stringify(requestBody)
       });
       const data = await res.json();
+      
+      // Debug: Log what we received from backend
+      console.log('Received from backend:', data);
+      console.log('QR Data:', data.qrData);
+      
       if (data.error) {
         setResult(`❌ ${data.error}`);
       } else {
