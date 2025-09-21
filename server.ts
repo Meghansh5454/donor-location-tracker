@@ -32,7 +32,20 @@ const Location = mongoose.model('Location', new mongoose.Schema({
   userName: String,
   rollNumber: String,
   mobileNumber: String,
+  donorId: { type: String, unique: true }, // Unique alphanumeric donor ID
+  requestId: String, // Blood request ID from URL token
+  token: String, // SMS token for verification
 }));
+
+// Generate unique donor ID (alphanumeric)
+function generateUniqueId(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return 'DON' + result; // e.g., DON4B7X9K2A
+}
 
 // Haversine function
 function haversine(lat1:number, lon1:number, lat2:number, lon2:number) {
@@ -50,7 +63,7 @@ const geofenceRadiusKm = 50;
 
 app.post('/api/save-location', async (req, res) => {
   try {
-    const { latitude, longitude, accuracy, userName, rollNumber, mobileNumber } = req.body;
+    const { latitude, longitude, accuracy, userName, rollNumber, mobileNumber, token, requestId } = req.body;
 
     if (!latitude || !longitude) return res.status(400).json({ error: 'Coordinates required' });
 
@@ -72,6 +85,13 @@ app.post('/api/save-location', async (req, res) => {
       return res.status(400).json({ error: 'IP and GPS mismatch' });
     }
 
+    // Generate unique donor ID
+    let donorId = generateUniqueId();
+    // Ensure uniqueness by checking database
+    while (await Location.exists({ donorId })) {
+      donorId = generateUniqueId();
+    }
+
     // Create formatted address field
     const address = `${userName} (${rollNumber}) - Current Location: ${latitude}, ${longitude}`;
     
@@ -82,10 +102,33 @@ app.post('/api/save-location', async (req, res) => {
       accuracy, 
       userName, 
       rollNumber, 
-      mobileNumber 
+      mobileNumber,
+      donorId,
+      requestId: requestId || null,
+      token: token || null
     });
     await loc.save();
-    res.json({ message: 'Saved', accuracy, timestamp: loc.timestamp });
+    
+    // Return enhanced response with donor data for QR generation
+    const qrData = {
+      donorId,
+      userName,
+      rollNumber,
+      mobileNumber,
+      latitude,
+      longitude,
+      timestamp: loc.timestamp,
+      requestId: requestId || null,
+      token: token || null
+    };
+    
+    res.json({ 
+      message: 'Saved', 
+      accuracy, 
+      timestamp: loc.timestamp, 
+      donorId,
+      qrData 
+    });
   } catch (err:any) {
     res.status(500).json({ error: err.message });
   }

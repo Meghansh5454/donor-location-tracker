@@ -1,6 +1,7 @@
 // filepath: d:\Donor_Location\Donor_Location\client\src\App.tsx
 import React from 'react';
 import './App.css';
+import QRCode from 'qrcode';
 
 const getApiBaseUrl = () => {
   // Check if we're on a devtunnel URL
@@ -19,6 +20,121 @@ const getApiBaseUrl = () => {
 };
 const API_BASE_URL = getApiBaseUrl();
 
+// Function to generate and download donor card PNG
+const generateAndDownloadDonorCard = async (qrData: any, donorId: string, userName: string, rollNumber: string, mobileNumber: string) => {
+  try {
+    // Generate QR code as data URL
+    const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: "#000000",
+        light: "#FFFFFF"
+      }
+    });
+
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size (mobile-optimized)
+    canvas.width = 400;
+    canvas.height = 600;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Border
+    ctx.strokeStyle = '#007bff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    // Title
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('BLOOD REQUEST RESPONSE', canvas.width / 2, 50);
+
+    // Donor ID (prominent)
+    ctx.fillStyle = '#007bff';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('DONOR ID', canvas.width / 2, 90);
+    
+    ctx.fillStyle = '#007bff';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText(donorId, canvas.width / 2, 120);
+
+    // Donor Information
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    
+    const leftMargin = 30;
+    let yPos = 160;
+    
+    ctx.fillText('Name:', leftMargin, yPos);
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(userName, leftMargin + 80, yPos);
+    
+    yPos += 30;
+    ctx.font = '16px Arial';
+    ctx.fillText('Roll Number:', leftMargin, yPos);
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(rollNumber, leftMargin + 100, yPos);
+    
+    yPos += 30;
+    ctx.font = '16px Arial';
+    ctx.fillText('Mobile:', leftMargin, yPos);
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(mobileNumber, leftMargin + 70, yPos);
+
+    // QR Code section
+    yPos += 80;
+    ctx.fillStyle = '#007bff';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SCAN QR CODE', canvas.width / 2, yPos);
+
+    // Load and draw QR code
+    const qrImage = new Image();
+    qrImage.onload = () => {
+      const qrSize = 180;
+      const qrX = (canvas.width - qrSize) / 2;
+      const qrY = yPos + 20;
+      
+      // QR code background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+      ctx.strokeStyle = '#007bff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+      
+      // Draw QR code
+      ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
+
+      // Instructions
+      ctx.fillStyle = '#6c757d';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Present this response card at the donation center', canvas.width / 2, qrY + qrSize + 40);
+
+      // Download the PNG
+      const link = document.createElement('a');
+      link.download = `blood-request-response-${donorId}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+    
+    qrImage.src = qrCodeDataURL;
+    
+  } catch (error) {
+    console.error('Error generating donor card:', error);
+  }
+};
+
 // Updated: Demo version 1.1
 
 function App() {
@@ -28,6 +144,11 @@ function App() {
   const [rollNumber, setRollNumber] = React.useState('');
   const [mobileNumber, setMobileNumber] = React.useState('');
   const [locationStatus, setLocationStatus] = React.useState<'getting' | 'success' | 'error' | 'denied'>('getting');
+
+  // Extract URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  const requestId = urlParams.get('request_id');
 
   // Auto-fetch location when component mounts
   React.useEffect(() => {
@@ -136,21 +257,27 @@ function App() {
           accuracy: currentCoords.acc,
           userName,
           rollNumber,
-          mobileNumber
+          mobileNumber,
+          token,
+          requestId
         })
       });
       const data = await res.json();
       if (data.error) {
         setResult(`❌ ${data.error}`);
       } else {
+        // Generate PNG with donor info and QR code
+        await generateAndDownloadDonorCard(data.qrData, data.donorId, userName, rollNumber, mobileNumber);
+        
         setResult(`
-          <p>✅ Successfully saved to database!</p>
+          <p>✅ Blood request response submitted!</p>
           <p><strong>Name:</strong> ${userName}</p>
           <p><strong>Roll:</strong> ${rollNumber}</p>
           <p><strong>Mobile:</strong> ${mobileNumber}</p>
-          <p><strong>Accuracy:</strong> ±${data.accuracy}m</p>
-          <p>Thank you for submitting your location!</p>
+          <p><strong>Donor ID:</strong> ${data.donorId}</p>
+          <p>📥 Your response card has been downloaded automatically!</p>
         `);
+        
         // Clear form after successful submission
         setUserName('');
         setRollNumber('');
@@ -164,85 +291,97 @@ function App() {
 
   return (
     <div className="App">
-      <h1>📍 Donor Location Tracker</h1>
-      
-      {/* Location Status */}
-      {locationStatus === 'getting' && (
-        <div style={{background: '#fff3cd', padding: '15px', borderRadius: '8px', margin: '20px 0'}}>
-          <h3>🔍 Detecting Your Location...</h3>
-          <p>Please allow location access when prompted by your browser.</p>
-        </div>
-      )}
-      
-      {locationStatus === 'denied' && (
-        <div style={{background: '#f8d7da', padding: '15px', borderRadius: '8px', margin: '20px 0'}}>
-          <h3>❌ Location Access Required</h3>
-          <p>This app needs your location to register your donation availability.</p>
-          <button onClick={() => window.location.reload()}>🔄 Refresh & Try Again</button>
-        </div>
-      )}
-      
-      {locationStatus === 'success' && (
-        <div style={{background: '#d1ecf1', padding: '15px', borderRadius: '8px', margin: '20px 0'}}>
-          <h3>✅ Location Captured Successfully!</h3>
-          <p>Please fill in your details below to complete registration.</p>
-        </div>
-      )}
+      <div className="app-container">
+        <h1 className="app-title">📍 Donor Location Tracker</h1>
+        
+        {/* Blood Request Info */}
+        {token && requestId && (
+          <div className="card blood-request-card">
+            <h3 className="blood-request-title">🩸 Blood Request Response</h3>
+            <p>You're responding to Blood Request: <strong>{requestId}</strong></p>
+            <p>Token: <code>{token}</code></p>
+          </div>
+        )}
+        
+        {/* Location Status */}
+        {locationStatus === 'getting' && (
+          <div className="card status-getting">
+            <h3>🔍 Detecting Your Location...</h3>
+            <p>Please allow location access when prompted by your browser.</p>
+          </div>
+        )}
+        
+        {locationStatus === 'denied' && (
+          <div className="card status-denied">
+            <h3>❌ Location Access Required</h3>
+            <p>This app needs your location to respond to the blood request.</p>
+            <button className="refresh-button" onClick={() => window.location.reload()}>
+              🔄 Refresh & Try Again
+            </button>
+          </div>
+        )}
+        
+        {locationStatus === 'success' && (
+          <div className="card status-success">
+            <h3>✅ Location Captured Successfully!</h3>
+            <p>Please fill in your details below to respond to the blood request.</p>
+          </div>
+        )}
 
       {/* Form - Only show when location is captured */}
       {locationStatus === 'success' && (
-        <div style={{background: '#f8f9fa', padding: '20px', borderRadius: '10px', margin: '20px 0'}}>
-          <h3>👤 Your Details</h3>
+        <div className="card form-card">
+          <h3 className="form-title">👤 Donor Details</h3>
           <div style={{marginBottom: '15px'}}>
             <input 
+              className="input-field"
               placeholder="Full Name" 
               value={userName} 
               onChange={e=>setUserName(e.target.value)}
-              style={{width: '100%', padding: '12px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc'}}
             />
           </div>
           <div style={{marginBottom: '15px'}}>
             <input 
+              className="input-field"
               placeholder="Roll Number" 
               value={rollNumber} 
               onChange={e=>setRollNumber(e.target.value)}
-              style={{width: '100%', padding: '12px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc'}}
             />
           </div>
           <div style={{marginBottom: '20px'}}>
             <input 
+              className="input-field"
               placeholder="Mobile Number" 
               value={mobileNumber} 
               onChange={e=>setMobileNumber(e.target.value)}
-              style={{width: '100%', padding: '12px', fontSize: '16px', borderRadius: '5px', border: '1px solid #ccc'}}
             />
           </div>
           <button 
+            className="submit-button"
             onClick={saveCurrentLocation}
             disabled={!userName.trim() || !rollNumber.trim() || !mobileNumber.trim()}
-            style={{
-              width: '100%', 
-              padding: '15px', 
-              fontSize: '18px', 
-              fontWeight: 'bold',
-              backgroundColor: (!userName.trim() || !rollNumber.trim() || !mobileNumber.trim()) ? '#ccc' : '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: (!userName.trim() || !rollNumber.trim() || !mobileNumber.trim()) ? 'not-allowed' : 'pointer'
-            }}
           >
             � Submit My Location
           </button>
         </div>
       )}
 
-      {/* Result Display */}
-      {result && (
-        <div style={{background: '#f8f9fa', padding: '15px', borderRadius: '8px', margin: '20px 0'}}>
-          <div dangerouslySetInnerHTML={{__html:result}} />
-        </div>
-      )}
+        {/* Result Display */}
+        {result && (
+          <div className="card result-card">
+            <div dangerouslySetInnerHTML={{__html:result}} />
+          </div>
+        )}
+
+        {/* Download Success Message */}
+        {result && result.includes('downloaded') && (
+          <div className="card status-success">
+            <h3>🎉 Response Submitted!</h3>
+            <p>Your blood request response card has been downloaded to your device.</p>
+            <p>Present the downloaded card at the donation center.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
